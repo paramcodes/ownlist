@@ -24,6 +24,7 @@ interface MovieCardProps {
   onLikeToggle?: (movieId: number) => void;
   onWatchToggle?: (movieId: number) => void;
   onWantToggle?: (movieId: number) => void;
+  onCardClick?: (movie: Movie) => void;
   showActions?: boolean;
   size?: "sm" | "md" | "lg";
 }
@@ -50,11 +51,19 @@ export default function MovieCard({
   onLikeToggle,
   onWatchToggle,
   onWantToggle,
+  onCardClick,
   showActions = true,
   size = "md",
 }: MovieCardProps) {
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const typeLabel = movie.type === "series" ? "Series" : movie.type === "anime" ? "Anime" : "Movie";
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (onCardClick) {
+      e.preventDefault();
+      onCardClick(movie);
+    }
+  };
 
   return (
     <motion.div
@@ -64,7 +73,7 @@ export default function MovieCard({
       whileHover={{ scale: 1.03, y: -4 }}
       className={`group relative flex-shrink-0 ${sizeClasses[size]}`}
     >
-      <Link to={`/movie/${movie.id}`} className="block">
+      <Link to={`/movie/${movie.id}`} onClick={handleClick} className="block">
         <div className={`relative overflow-hidden rounded-xl bg-card ${imageHeights[size]}`}>
           {movie.posterPath ? (
             <img

@@ -77,6 +77,23 @@ export default function SearchPage() {
     [addMovie, setSearchParams]
   );
 
+  const handleResultClick = useCallback(
+    (movie: any) => {
+      if (movie.id) {
+        // Movie already has numeric ID from database, navigate directly
+        window.location.href = `/movie/${movie.id}`;
+      } else if (movie.tmdbId) {
+        // Movie is from external API search, need to create it first
+        addMovie.mutate({ tmdbId: movie.tmdbId }, {
+          onSuccess: (createdMovie) => {
+            window.location.href = `/movie/${createdMovie.id}`;
+          },
+        });
+      }
+    },
+    [addMovie]
+  );
+
   const results = searchResults?.results || [];
 
   return (
@@ -169,6 +186,7 @@ export default function SearchPage() {
                 key={movie.tmdbId || index}
                 movie={movie}
                 index={index}
+                onCardClick={handleResultClick}
                 onLikeToggle={() => {
                   addMovie.mutate({ tmdbId: movie.tmdbId }, {
                     onSuccess: (res) => {
