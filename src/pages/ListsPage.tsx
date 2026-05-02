@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import Layout from "@/components/Layout";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Film, Tv, Globe, Lock, Trash2, Edit2, X, Check } from "lucide-react";
+import { Plus, Film, Tv, Globe, Lock, Trash2, Edit2, X, Check, Gamepad2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type ListType = "movie" | "anime" | "series";
+type ListType = "movie" | "anime" | "series" | "game";
 
 export default function ListsPage() {
   const { isAuthenticated } = useAuth();
@@ -160,6 +160,10 @@ export default function ListsPage() {
             <TabsTrigger value="series" className="flex items-center gap-1.5">
               <Tv className="h-3.5 w-3.5" />
               Web Series
+            </TabsTrigger>
+            <TabsTrigger value="game" className="flex items-center gap-1.5">
+              <Gamepad2 className="h-3.5 w-3.5" />
+              Games
             </TabsTrigger>
           </TabsList>
         </Tabs>

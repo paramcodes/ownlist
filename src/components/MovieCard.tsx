@@ -56,7 +56,7 @@ export default function MovieCard({
   size = "md",
 }: MovieCardProps) {
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  const typeLabel = movie.type === "series" ? "Series" : movie.type === "anime" ? "Anime" : "Movie";
+  const typeLabel = movie.type === "series" ? "Series" : movie.type === "anime" ? "Anime" : movie.type === "game" ? "Game" : "Movie";
 
   const handleClick = (e: React.MouseEvent) => {
     if (onCardClick) {

@@ -63,8 +63,25 @@ type JikanDetailResponse = {
   data?: JikanAnime;
 };
 
+type RawgGame = {
+  id: number;
+  name: string;
+  released?: string | null;
+  background_image?: string | null;
+  rating?: number | null;
+  ratings_count?: number | null;
+  genres?: Array<{ name: string }>;
+  platforms?: Array<{ platform?: { name?: string } }>;
+  description_raw?: string;
+};
+
+type RawgSearchResponse = {
+  results?: RawgGame[];
+};
+
 const OMDB_API_URL = "https://www.omdbapi.com/";
 const JIKAN_API_URL = "https://api.jikan.moe/v4";
+const RAWG_API_URL = "https://api.rawg.io/api";
 
 function normalizePoster(url?: string | null) {
   if (!url || url === "N/A") return null;
@@ -128,6 +145,27 @@ function jikanToMovie(item: JikanAnime) {
   };
 }
 
+function rawgToMovie(item: RawgGame) {
+  const platformNames = (item.platforms ?? [])
+    .map((entry) => entry.platform?.name)
+    .filter((name): name is string => Boolean(name));
+
+  return {
+    tmdbId: `rawg:${item.id}`,
+    title: item.name || "Untitled",
+    overview: item.description_raw || "",
+    posterPath: item.background_image || null,
+    backdropPath: item.background_image || null,
+    releaseDate: item.released || "",
+    type: "game" as const,
+    popularity: String(item.ratings_count || 0),
+    voteAverage: String(item.rating || 0),
+    voteCount: item.ratings_count || 0,
+    genre: (item.genres ?? []).map((genre) => genre.name).join(", "),
+    platforms: platformNames.join(", "),
+  };
+}
+
 async function omdbFetch<T>(params: Record<string, string>): Promise<T | null> {
   const url = new URL(OMDB_API_URL);
   url.searchParams.set("apikey", env.omdbApiKey);
@@ -154,6 +192,25 @@ async function jikanFetch<T>(path: string): Promise<T | null> {
   return (await resp.json()) as T;
 }
 
+async function rawgFetch<T>(path: string, params?: Record<string, string>): Promise<T | null> {
+  if (!env.rawgApiKey) {
+    return null;
+  }
+
+  const url = new URL(`${RAWG_API_URL}${path}`);
+  url.searchParams.set("key", env.rawgApiKey);
+  for (const [key, value] of Object.entries(params || {})) {
+    url.searchParams.set(key, value);
+  }
+
+  const resp = await fetch(url.toString());
+  if (!resp.ok) {
+    throw new Error(`RAWG error: ${resp.status}`);
+  }
+
+  return (await resp.json()) as T;
+}
+
 async function searchOmdb(query: string, page: number, type?: "movie" | "series") {
   const data = await omdbFetch<OmdbSearchResponse>({
     s: query,
@@ -172,6 +229,16 @@ async function searchJikan(query: string, page: number) {
   return (data?.data ?? []).map(jikanToMovie);
 }
 
+async function searchRawg(query: string, page: number) {
+  const data = await rawgFetch<RawgSearchResponse>("/games", {
+    search: query,
+    page: String(page),
+    page_size: "20",
+  });
+
+  return (data?.results ?? []).map(rawgToMovie);
+}
+
 async function fetchOmdbDetails(imdbId: string) {
   const data = await omdbFetch<OmdbDetailResponse>({ i: imdbId, plot: "full" });
   return data ? omdbToMovie(data) : null;
@@ -182,12 +249,20 @@ async function fetchJikanDetails(malId: string) {
   return data?.data ? jikanToMovie(data.data) : null;
 }
 
+async function fetchRawgDetails(rawgId: string) {
+  const data = await rawgFetch<RawgGame>(`/games/${encodeURIComponent(rawgId)}`);
+  return data ? rawgToMovie(data) : null;
+}
+
 function parseExternalId(inputId: string) {
   if (inputId.startsWith("omdb:")) {
     return { source: "omdb" as const, id: inputId.slice(5) };
   }
   if (inputId.startsWith("jikan:")) {
     return { source: "jikan" as const, id: inputId.slice(6) };
+  }
+  if (inputId.startsWith("rawg:")) {
+    return { source: "rawg" as const, id: inputId.slice(5) };
   }
   return { source: null as null, id: inputId };
 }
@@ -200,23 +275,29 @@ async function fetchExternalMovie(inputId: string) {
   if (parsed.source === "jikan") {
     return fetchJikanDetails(parsed.id);
   }
+  if (parsed.source === "rawg") {
+    return fetchRawgDetails(parsed.id);
+  }
 
   const fromOmdb = await fetchOmdbDetails(parsed.id).catch(() => null);
   if (fromOmdb) return fromOmdb;
-  return fetchJikanDetails(parsed.id).catch(() => null);
+  const fromJikan = await fetchJikanDetails(parsed.id).catch(() => null);
+  if (fromJikan) return fromJikan;
+  return fetchRawgDetails(parsed.id).catch(() => null);
 }
 
 export const movieRouter = createRouter({
   search: publicQuery
     .input(z.object({ query: z.string().min(1), page: z.number().default(1) }))
     .query(async ({ input }) => {
-      const [movies, series, anime] = await Promise.all([
+      const [movies, series, anime, games] = await Promise.all([
         searchOmdb(input.query, input.page, "movie").catch(() => []),
         searchOmdb(input.query, input.page, "series").catch(() => []),
         searchJikan(input.query, input.page).catch(() => []),
+        searchRawg(input.query, input.page).catch(() => []),
       ]);
 
-      const results = [...movies, ...series, ...anime];
+      const results = [...movies, ...series, ...anime, ...games];
       return { results, page: input.page, totalPages: 1 };
     }),
 
@@ -224,13 +305,14 @@ export const movieRouter = createRouter({
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ input }) => {
       if (input.query.length < 2) return [];
-      const [movies, series, anime] = await Promise.all([
+      const [movies, series, anime, games] = await Promise.all([
         searchOmdb(input.query, 1, "movie").catch(() => []),
         searchOmdb(input.query, 1, "series").catch(() => []),
         searchJikan(input.query, 1).catch(() => []),
+        searchRawg(input.query, 1).catch(() => []),
       ]);
 
-      return [...movies, ...series, ...anime].slice(0, 8).map((movie) => ({
+      return [...movies, ...series, ...anime, ...games].slice(0, 8).map((movie) => ({
         tmdbId: movie.tmdbId,
         title: movie.title,
         posterPath: movie.posterPath,
@@ -268,11 +350,12 @@ export const movieRouter = createRouter({
           posterPath: details.posterPath,
           backdropPath: details.backdropPath,
           releaseDate: details.releaseDate,
-          type: details.type as "movie" | "series" | "anime",
+          type: details.type as "movie" | "series" | "anime" | "game",
           popularity: details.popularity,
           voteAverage: details.voteAverage,
           voteCount: details.voteCount,
           genre: details.genre,
+          platforms: details.platforms,
           isCustom: false,
           createdAt: nowIso(),
         };
@@ -288,7 +371,7 @@ export const movieRouter = createRouter({
           overview: input.movieData.overview || "",
           posterPath: input.movieData.posterPath || null,
           releaseDate: input.movieData.releaseDate || "",
-          type: (input.movieData.type || "movie") as "movie" | "series" | "anime",
+          type: (input.movieData.type || "movie") as "movie" | "series" | "anime" | "game",
           isCustom: true,
           createdAt: nowIso(),
         };

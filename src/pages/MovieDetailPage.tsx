@@ -78,7 +78,7 @@ export default function MovieDetailPage() {
   }
 
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  const typeLabel = movie.type === "series" ? "TV Series" : movie.type === "anime" ? "Anime" : "Movie";
+  const typeLabel = movie.type === "series" ? "TV Series" : movie.type === "anime" ? "Anime" : movie.type === "game" ? "Game" : "Movie";
 
   return (
     <Layout>

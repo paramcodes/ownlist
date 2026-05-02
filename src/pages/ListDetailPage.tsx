@@ -86,7 +86,7 @@ export default function ListDetailPage() {
           <div className="text-center py-16">
             <Film className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
             <h3 className="text-lg font-medium">This list is empty</h3>
-            <p className="text-muted-foreground">Add movies from the search page.</p>
+            <p className="text-muted-foreground">Add items from search pages.</p>
           </div>
         )}
       </div>

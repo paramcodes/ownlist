@@ -13,5 +13,6 @@ export const env = {
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
   omdbApiKey: required("OMDB_API_KEY"),
+  rawgApiKey: process.env.RAWG_API_KEY ?? "",
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
 };

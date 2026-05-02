@@ -109,7 +109,7 @@ export default function SearchPage() {
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={inputRef}
-              placeholder="Search movies, TV shows, anime..."
+              placeholder="Search movies, TV shows, anime, games..."
               className="h-14 pl-12 pr-12 text-lg bg-card border-border focus-visible:ring-primary rounded-xl"
               value={query}
               onChange={(e) => {
@@ -156,7 +156,7 @@ export default function SearchPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{item.title}</p>
                         <p className="text-xs text-muted-foreground">
-                          {item.releaseDate ? new Date(item.releaseDate).getFullYear() : ""} · {item.type === "series" ? "Series" : "Movie"}
+                          {item.releaseDate ? new Date(item.releaseDate).getFullYear() : ""} · {item.type === "series" ? "Series" : item.type === "anime" ? "Anime" : item.type === "game" ? "Game" : "Movie"}
                         </p>
                       </div>
                     </button>
@@ -224,8 +224,8 @@ export default function SearchPage() {
         {!query && (
           <div className="text-center py-16">
             <Search className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
-            <h3 className="text-lg font-medium mb-2">Search for movies, series, and anime</h3>
-            <p className="text-muted-foreground">Type to search OMDb movies and Jikan anime, then add them to your lists.</p>
+            <h3 className="text-lg font-medium mb-2">Search for movies, series, anime, and games</h3>
+            <p className="text-muted-foreground">Type to search OMDb, Jikan, and RAWG, then add items to your lists.</p>
           </div>
         )}
       </div>

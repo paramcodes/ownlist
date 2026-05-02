@@ -7,6 +7,7 @@ import ListDetailPage from './pages/ListDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import TrendingPage from './pages/TrendingPage'
 import LikedPage from './pages/LikedPage'
+import GamesPage from './pages/GamesPage'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/profile/:userId/:userType" element={<ProfilePage />} />
       <Route path="/trending" element={<TrendingPage />} />
+      <Route path="/games" element={<GamesPage />} />
       <Route path="/liked" element={<LikedPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="*" element={<NotFound />} />

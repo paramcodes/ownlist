@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { collections, getNextId, nowIso } from "./queries/connection";
 
-const listType = z.enum(["movie", "anime", "series"]);
+const listType = z.enum(["movie", "anime", "series", "game"]);
 
 export const listRouter = createRouter({
   create: authedQuery

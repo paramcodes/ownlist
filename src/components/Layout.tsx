@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
+import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,8 +22,18 @@ import {
   Home,
   Heart,
   TrendingUp,
+  Gamepad2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout } = useAuth();
@@ -30,18 +41,64 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [isSelectingSuggestion, setIsSelectingSuggestion] = useState(false);
+  const containerRef = useRef<HTMLFormElement>(null);
+  const mobileContainerRef = useRef<HTMLFormElement>(null);
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
+
+  const { data: autocompleteResults } = trpc.movie.autocomplete.useQuery(
+    { query: debouncedSearchQuery },
+    { enabled: debouncedSearchQuery.length >= 2 && showAutocomplete && !isSelectingSuggestion }
+  );
+  const addMovie = trpc.movie.getOrCreate.useMutation();
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const clickedDesktopSearch = containerRef.current?.contains(target);
+      const clickedMobileSearch = mobileContainerRef.current?.contains(target);
+      if (!clickedDesktopSearch && !clickedMobileSearch) {
+        setShowAutocomplete(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setShowAutocomplete(false);
       setSearchQuery("");
+    }
+  };
+
+  const typeLabel = (type?: string) => {
+    if (type === "series") return "Series";
+    if (type === "anime") return "Anime";
+    if (type === "game") return "Game";
+    return "Movie";
+  };
+
+  const handleSuggestionSelect = async (item: { tmdbId: string }) => {
+    setIsSelectingSuggestion(true);
+    setShowAutocomplete(false);
+    try {
+      const created = await addMovie.mutateAsync({ tmdbId: item.tmdbId });
+      setMobileMenuOpen(false);
+      navigate(`/movie/${created.id}`);
+      setSearchQuery("");
+    } finally {
+      setIsSelectingSuggestion(false);
     }
   };
 
   const navLinks = [
     { path: "/", label: "Home", icon: Home },
     { path: "/lists", label: "Lists", icon: List },
+    { path: "/games", label: "Games", icon: Gamepad2 },
     { path: "/trending", label: "Trending", icon: TrendingUp },
   ];
 
@@ -59,15 +116,54 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-xl font-bold tracking-tight">OwnList</span>
           </Link>
 
-          <form onSubmit={handleSearch} className="hidden sm:flex flex-1 max-w-md mx-4">
+          <form onSubmit={handleSearch} className="hidden sm:flex flex-1 max-w-md mx-4" ref={containerRef}>
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search movies, series, anime..."
+                placeholder="Search movies, series, anime, games..."
                 className="w-full pl-10 bg-secondary/50 border-border focus-visible:ring-primary"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowAutocomplete(true);
+                  setIsSelectingSuggestion(false);
+                }}
+                onFocus={() => setShowAutocomplete(true)}
               />
+
+              <AnimatePresence>
+                {showAutocomplete && autocompleteResults && autocompleteResults.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className="absolute z-50 mt-2 w-full rounded-xl bg-card border border-border shadow-xl overflow-hidden"
+                  >
+                    {autocompleteResults.map((item: { tmdbId: string; title: string; posterPath: string | null; releaseDate: string | null; type: string }) => (
+                      <button
+                        key={item.tmdbId}
+                        type="button"
+                        onClick={() => handleSuggestionSelect(item)}
+                        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-secondary transition-colors text-left"
+                      >
+                        {item.posterPath ? (
+                          <img src={item.posterPath} alt="" className="h-10 w-7 rounded object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-7 items-center justify-center rounded bg-secondary">
+                            <Film className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.releaseDate ? new Date(item.releaseDate).getFullYear() : ""} · {typeLabel(item.type)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </form>
 
@@ -175,15 +271,54 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               className="md:hidden border-t border-border overflow-hidden"
             >
               <div className="px-4 py-3 space-y-2">
-                <form onSubmit={handleSearch} className="sm:hidden mb-2">
+                <form onSubmit={handleSearch} className="sm:hidden mb-2" ref={mobileContainerRef}>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       placeholder="Search..."
                       className="w-full pl-10 bg-secondary/50"
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowAutocomplete(true);
+                        setIsSelectingSuggestion(false);
+                      }}
+                      onFocus={() => setShowAutocomplete(true)}
                     />
+
+                    <AnimatePresence>
+                      {showAutocomplete && autocompleteResults && autocompleteResults.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          className="absolute z-50 mt-2 w-full rounded-xl bg-card border border-border shadow-xl overflow-hidden"
+                        >
+                          {autocompleteResults.map((item: { tmdbId: string; title: string; posterPath: string | null; releaseDate: string | null; type: string }) => (
+                            <button
+                              key={item.tmdbId}
+                              type="button"
+                              onClick={() => handleSuggestionSelect(item)}
+                              className="flex items-center gap-3 w-full px-4 py-3 hover:bg-secondary transition-colors text-left"
+                            >
+                              {item.posterPath ? (
+                                <img src={item.posterPath} alt="" className="h-10 w-7 rounded object-cover" />
+                              ) : (
+                                <div className="flex h-10 w-7 items-center justify-center rounded bg-secondary">
+                                  <Film className="h-3.5 w-3.5 text-muted-foreground" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{item.title}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {item.releaseDate ? new Date(item.releaseDate).getFullYear() : ""} · {typeLabel(item.type)}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </form>
                 {navLinks.map((link) => (
